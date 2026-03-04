@@ -1,0 +1,17 @@
+{
+  "name": "story-global-wallet-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Story Protocol Global Wallet monorepo",
+  "scripts": {
+    "build-story-global-wallet": "pnpm -F @story-protocol/global-wallet build",
+    "rainbowkit-vite": "pnpm -F rainbowkit-vite dev",
+    "dynamic-nextjs": "pnpm -F dynamic-nextjs dev"
+  },
+  "keywords": [],
+  "author": "Story Protocol",
+  "license": "MIT",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

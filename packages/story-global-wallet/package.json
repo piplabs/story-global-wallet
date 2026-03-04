@@ -1,0 +1,78 @@
+{
+  "name": "@story-protocol/global-wallet",
+  "author": "PIP Labs",
+  "description": "Story Protocol Global Wallet - Cross-app embedded wallet for the IP ecosystem",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/types/index.d.ts",
+  "typings": "./dist/types/index.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/story-protocol/global-wallet"
+  },
+  "keywords": [
+    "story",
+    "global-wallet",
+    "web3",
+    "wallet",
+    "eip6963",
+    "dynamic"
+  ],
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && npm run build:esm && npm run build:cjs && npm run build:types",
+    "build:esm": "tsc --project tsconfig.json --outDir dist/esm && tsc-alias --project tsconfig.json --outDir dist/esm",
+    "build:cjs": "esbuild src/index.ts src/zerodev.ts src/lib/config.ts src/lib/wallet.ts src/lib/EIP6963Emitter.ts --format=cjs --outdir=dist/cjs --outbase=src --platform=node --packages=external --target=es2020",
+    "build:types": "tsc --project ./tsconfig.json --declarationDir ./dist/types --emitDeclarationOnly --declaration --declarationMap",
+    "pack-local": "npm run build && npm pack"
+  },
+  "dependencies": {
+    "@dynamic-labs/global-wallet-client": "^4.15.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3",
+    "tsc-alias": "^1.8.10",
+    "typescript": "^5.7.3"
+  },
+  "peerDependencies": {
+    "@dynamic-labs/ethereum-aa": "^4.15.0",
+    "@zerodev/sdk": ">=5.4.36",
+    "viem": "^2.7.12"
+  },
+  "peerDependenciesMeta": {
+    "viem": {
+      "optional": true
+    },
+    "@zerodev/sdk": {
+      "optional": true
+    },
+    "@dynamic-labs/ethereum-aa": {
+      "optional": true
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "zerodev": [
+        "./dist/types/zerodev.d.ts"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "default": "./dist/cjs/index.js"
+    },
+    "./zerodev": {
+      "types": "./dist/types/zerodev.d.ts",
+      "import": "./dist/esm/zerodev.js",
+      "default": "./dist/cjs/zerodev.js"
+    }
+  }
+}
