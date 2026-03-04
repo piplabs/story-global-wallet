@@ -2,7 +2,7 @@
   "name": "@story-protocol/global-wallet",
   "author": "PIP Labs",
   "description": "Story Protocol Global Wallet - Cross-app embedded wallet for the IP ecosystem",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
@@ -28,7 +28,7 @@
   "scripts": {
     "build": "rm -rf dist && npm run build:esm && npm run build:cjs && npm run build:types",
     "build:esm": "tsc --project tsconfig.json --outDir dist/esm && tsc-alias --project tsconfig.json --outDir dist/esm",
-    "build:cjs": "esbuild src/index.ts src/zerodev.ts src/lib/config.ts src/lib/wallet.ts src/lib/EIP6963Emitter.ts --format=cjs --outdir=dist/cjs --outbase=src --platform=node --packages=external --target=es2020",
+    "build:cjs": "esbuild src/index.ts src/story.ts src/zerodev.ts src/lib/config.ts src/lib/wallet.ts src/lib/EIP6963Emitter.ts --format=cjs --outdir=dist/cjs --outbase=src --platform=node --packages=external --target=es2020",
     "build:types": "tsc --project ./tsconfig.json --declarationDir ./dist/types --emitDeclarationOnly --declaration --declarationMap",
     "pack-local": "npm run build && npm pack"
   },
@@ -58,6 +58,9 @@
   },
   "typesVersions": {
     "*": {
+      "story": [
+        "./dist/types/story.d.ts"
+      ],
       "zerodev": [
         "./dist/types/zerodev.d.ts"
       ]
@@ -68,6 +71,11 @@
       "types": "./dist/types/index.d.ts",
       "import": "./dist/esm/index.js",
       "default": "./dist/cjs/index.js"
+    },
+    "./story": {
+      "types": "./dist/types/story.d.ts",
+      "import": "./dist/esm/story.js",
+      "default": "./dist/cjs/story.js"
     },
     "./zerodev": {
       "types": "./dist/types/zerodev.d.ts",

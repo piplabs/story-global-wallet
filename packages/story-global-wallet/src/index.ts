@@ -1,3 +1,5 @@
-import { EIP6963Emitter } from "./lib/EIP6963Emitter";
+import Wallet from "./lib/wallet";
 
-EIP6963Emitter();
+export * from "@dynamic-labs/global-wallet-client/features";
+
+export default Wallet;

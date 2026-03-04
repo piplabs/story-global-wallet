@@ -16,14 +16,32 @@ npm install @story-protocol/global-wallet
 
 Add a single import to your app's entry point. That's it — no API keys, no configuration, no Dynamic account needed.
 
+> **Important:** This package is client-side only. In Next.js App Router, the import must be in a Client Component (a file with `"use client"`). It cannot be imported in a Server Component.
+
 **Next.js (App Router):**
 
 ```tsx
+// components/Providers.tsx (or any Client Component)
+"use client";
+import "@story-protocol/global-wallet/story";
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
+```
+
+```tsx
 // app/layout.tsx
-import "@story-protocol/global-wallet";
+import { Providers } from "@/components/Providers";
 
 export default function RootLayout({ children }) {
-  return <html><body>{children}</body></html>;
+  return (
+    <html>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  );
 }
 ```
 
@@ -31,7 +49,7 @@ export default function RootLayout({ children }) {
 
 ```tsx
 // pages/_app.tsx
-import "@story-protocol/global-wallet";
+import "@story-protocol/global-wallet/story";
 
 export default function App({ Component, pageProps }) {
   return <Component {...pageProps} />;
@@ -42,7 +60,7 @@ export default function App({ Component, pageProps }) {
 
 ```tsx
 // main.tsx or index.tsx
-import "@story-protocol/global-wallet";
+import "@story-protocol/global-wallet/story";
 ```
 
 ### 2. Use with your wallet library
@@ -52,7 +70,7 @@ The Story Global Wallet is auto-discovered via [EIP-6963](https://eips.ethereum.
 **RainbowKit:**
 
 ```tsx
-import "@story-protocol/global-wallet";
+import "@story-protocol/global-wallet/story";
 import { RainbowKitProvider, ConnectButton } from "@rainbow-me/rainbowkit";
 import { WagmiProvider } from "wagmi";
 
@@ -71,7 +89,7 @@ function App() {
 **wagmi (standalone):**
 
 ```tsx
-import "@story-protocol/global-wallet";
+import "@story-protocol/global-wallet/story";
 import { useConnect } from "wagmi";
 
 function ConnectButton() {
@@ -93,7 +111,7 @@ function ConnectButton() {
 **ConnectKit:**
 
 ```tsx
-import "@story-protocol/global-wallet";
+import "@story-protocol/global-wallet/story";
 import { ConnectKitProvider, ConnectKitButton } from "connectkit";
 
 function App() {
@@ -107,16 +125,17 @@ function App() {
 
 **Dynamic:**
 
-If your app already uses the [Dynamic SDK](https://www.dynamic.xyz/), the Story Global Wallet will also appear in the Dynamic wallet list. Install the global wallet package alongside your existing Dynamic setup:
+If your app already uses the [Dynamic SDK](https://www.dynamic.xyz/), the Story Global Wallet will also appear in the Dynamic wallet list. Add the import to your existing Client Component providers:
 
 ```tsx
-// app/layout.tsx
-import "@story-protocol/global-wallet";
+// components/Providers.tsx
+"use client";
+import "@story-protocol/global-wallet/story";
 
 import { DynamicContextProvider } from "@dynamic-labs/sdk-react-core";
 import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
 
-export default function RootLayout({ children }) {
+export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <DynamicContextProvider
       settings={{

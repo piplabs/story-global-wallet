@@ -1,5 +1,5 @@
 // Import the Story Global Wallet — this announces the EIP-6963 provider
-import "@story-protocol/global-wallet";
+import "@story-protocol/global-wallet/story";
 
 import React from "react";
 import ReactDOM from "react-dom/client";
