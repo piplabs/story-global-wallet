@@ -21,39 +21,10 @@ Add a single import to your app's entry point. That's it — no API keys, no con
 **Next.js (App Router):**
 
 ```tsx
-// components/Providers.tsx (or any Client Component)
+// app/layout.tsx or Providers.tsx (or any Client Component)
 "use client";
+
 import "@story-protocol/global-wallet/story";
-
-export function Providers({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
-}
-```
-
-```tsx
-// app/layout.tsx
-import { Providers } from "@/components/Providers";
-
-export default function RootLayout({ children }) {
-  return (
-    <html>
-      <body>
-        <Providers>{children}</Providers>
-      </body>
-    </html>
-  );
-}
-```
-
-**Next.js (Pages Router):**
-
-```tsx
-// pages/_app.tsx
-import "@story-protocol/global-wallet/story";
-
-export default function App({ Component, pageProps }) {
-  return <Component {...pageProps} />;
-}
 ```
 
 **Vite / Create React App:**
@@ -166,19 +137,203 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
 The user gets the same wallet address across every app that integrates this package.
 
-## Verification
+## Gas Sponsorship with ZeroDev
 
-After integrating, verify everything works:
+The Story Global Wallet uses [ZeroDev](https://zerodev.app/) for Account Abstraction, enabling gasless (sponsored) transactions. You can create a kernel client to sponsor gas for your users.
+
+### Creating a Kernel Client
 
 ```tsx
-// Quick check: listen for the EIP-6963 provider announcement
-window.addEventListener("eip6963:announceProvider", (event) => {
-  console.log("Providers:", event.detail);
+import GlobalWallet from "@story-protocol/global-wallet";
+import { createKernelClient } from "@story-protocol/global-wallet/zerodev";
+
+const smartWallet = GlobalWallet.wallets[0];
+
+const kernelClient = await createKernelClient({
+  wallet: smartWallet,
+  chainId: 1514, // Story Mainnet
+  paymaster: "SPONSOR",
+  paymasterRpc: "https://rpc.zerodev.app/api/v2/paymaster/02d8a620-8842-475c-ab23-576a7dd1a5be",
 });
-window.dispatchEvent(new Event("eip6963:requestProvider"));
 ```
 
-You should see the Story Global Wallet in the announced providers list.
+### Sending Sponsored Transactions
+
+Once you have a kernel client, you can batch and send gasless user operations:
+
+```tsx
+import { encodeFunctionData } from "viem";
+
+const { account } = kernelClient;
+
+const hash = await kernelClient.sendUserOperation({
+  account,
+  callData: await account.encodeCalls([
+    {
+      to: contractAddress,
+      value: BigInt(0),
+      data: encodeFunctionData({
+        abi: contractABI,
+        functionName: "mint",
+        args: [walletAddress],
+      }),
+    },
+  ]),
+});
+```
+
+### Using with the Story SDK
+
+When using the Story Global Wallet with `@story-protocol/core-sdk`, ZeroDev returns **UserOperation hashes** instead of regular transaction hashes. The Story SDK needs a `txHashResolver` to convert these into real transaction hashes so it can track on-chain events.
+
+Use `waitForUserOperationReceipt` on the kernel client to resolve UserOp hashes:
+
+```tsx
+import {
+  StoryClient,
+  SupportedChainIds,
+} from "@story-protocol/core-sdk";
+import GlobalWallet from "@story-protocol/global-wallet";
+import { createKernelClient } from "@story-protocol/global-wallet/zerodev";
+import { Hash, http } from "viem";
+
+// 1. Create the kernel client from the Global Wallet
+const smartWallet = GlobalWallet.wallets[0];
+const kernelClient = await createKernelClient({
+  wallet: smartWallet,
+  chainId: 1514,
+  paymaster: "SPONSOR",
+  paymasterRpc: "https://rpc.zerodev.app/api/v2/paymaster/02d8a620-8842-475c-ab23-576a7dd1a5be",
+});
+
+// 2. Build a txHashResolver that converts UserOp hashes to tx hashes
+const txHashResolver = async (userOpHash: Hash): Promise<Hash> => {
+  const receipt = await kernelClient.waitForUserOperationReceipt({
+    hash: userOpHash,
+  });
+  return receipt.receipt.transactionHash;
+};
+
+// 3. Pass the resolver when creating the StoryClient
+const storyClient = StoryClient.newClientUseWallet({
+  transport: http(),
+  wallet: walletClient, // from wagmi useWalletClient() or similar
+  chainId: "1514" as SupportedChainIds,
+  txHashResolver,
+});
+
+// 4. Now SDK write operations work with sponsored transactions
+const response = await storyClient.license.mintLicenseTokens({
+  licenseTermsId: "1",
+  licensorIpId: "0x...",
+  receiver: "0x...",
+  amount: 1,
+});
+```
+
+#### React Example (wagmi)
+
+Here's a full React provider pattern for integrating gas sponsorship with the Story SDK:
+
+```tsx
+"use client";
+
+import {
+  StoryClient,
+  SupportedChainIds,
+} from "@story-protocol/core-sdk";
+import GlobalWallet from "@story-protocol/global-wallet";
+import { createKernelClient } from "@story-protocol/global-wallet/zerodev";
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { Hash, http } from "viem";
+import { useWalletClient } from "wagmi";
+
+interface StorySDKContextValue {
+  storyClient: StoryClient | null;
+  isLoading: boolean;
+}
+
+const StorySDKContext = createContext<StorySDKContextValue | null>(null);
+
+export function useStorySDK() {
+  const context = useContext(StorySDKContext);
+  if (!context) {
+    throw new Error("useStorySDK must be used within a StorySdkProvider");
+  }
+  return context;
+}
+
+export function StorySdkProvider({ children }: { children: ReactNode }) {
+  const { data: walletClient } = useWalletClient();
+  const [storyClient, setStoryClient] = useState<StoryClient | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const txHashResolver = useMemo(() => {
+    const smartWallet = GlobalWallet.wallets?.[0];
+    if (!smartWallet) return undefined;
+
+    try {
+      const kernelClient = createKernelClient({
+        wallet: smartWallet,
+        chainId: 1514,
+        paymaster: "SPONSOR",
+        paymasterRpc: "https://rpc.zerodev.app/api/v2/paymaster/02d8a620-8842-475c-ab23-576a7dd1a5be",
+      });
+
+      return async (userOpHash: Hash): Promise<Hash> => {
+        const receipt = await (
+          await kernelClient
+        ).waitForUserOperationReceipt({
+          hash: userOpHash,
+        });
+        return receipt.receipt.transactionHash;
+      };
+    } catch (error) {
+      console.warn(
+        "[StorySdkProvider] Could not create kernel client:",
+        error,
+      );
+      return undefined;
+    }
+  }, [walletClient]);
+
+  useEffect(() => {
+    if (!walletClient) {
+      setStoryClient(null);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const client = StoryClient.newClientUseWallet({
+        transport: http(),
+        wallet: walletClient,
+        chainId: `${walletClient.chain.id}` as SupportedChainIds,
+        txHashResolver,
+      });
+
+      setStoryClient(client);
+    } catch (error) {
+      console.error("[StorySdkProvider] Error creating StoryClient:", error);
+      setStoryClient(null);
+    }
+    setIsLoading(false);
+  }, [walletClient, txHashResolver]);
+
+  return (
+    <StorySDKContext.Provider value={{ storyClient, isLoading }}>
+      {children}
+    </StorySDKContext.Provider>
+  );
+}
+```
 
 ## How It Works
 
@@ -196,9 +351,9 @@ You should see the Story Global Wallet in the announced providers list.
 
 ## Support
 
-- Documentation: https://docs.story.foundation
-- Discord: https://discord.gg/storyprotocol
-- GitHub Issues: https://github.com/story-protocol/global-wallet/issues
+- Documentation: [https://docs.story.foundation](https://docs.story.foundation)
+- Discord: [https://discord.gg/storyprotocol](https://discord.gg/storyprotocol)
+- GitHub Issues: [https://github.com/story-protocol/global-wallet/issues](https://github.com/story-protocol/global-wallet/issues)
 
 ## License
 
