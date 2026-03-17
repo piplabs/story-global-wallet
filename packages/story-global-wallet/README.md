@@ -18,120 +18,17 @@ Add a single import to your app's entry point. That's it — no API keys, no con
 
 > **Important:** This package is client-side only. In Next.js App Router, the import must be in a Client Component (a file with `"use client"`). It cannot be imported in a Server Component.
 
-**Next.js (App Router):**
-
 ```tsx
-// app/layout.tsx or Providers.tsx (or any Client Component)
+// Next.js: app/layout.tsx or Providers.tsx (must be a Client Component)
+// Vite/CRA: main.tsx or index.tsx
 "use client";
 
-import "@story-protocol/global-wallet/story";
-```
-
-**Vite / Create React App:**
-
-```tsx
-// main.tsx or index.tsx
 import "@story-protocol/global-wallet/story";
 ```
 
 ### 2. Use with your wallet library
 
-The Story Global Wallet is auto-discovered via [EIP-6963](https://eips.ethereum.org/EIPS/eip-6963) — no extra configuration needed. It appears alongside MetaMask, Coinbase Wallet, and others in any compatible wallet selector.
-
-**RainbowKit:**
-
-```tsx
-import "@story-protocol/global-wallet/story";
-import { RainbowKitProvider, ConnectButton } from "@rainbow-me/rainbowkit";
-import { WagmiProvider } from "wagmi";
-
-function App() {
-  return (
-    <WagmiProvider config={config}>
-      <RainbowKitProvider>
-        {/* "Story Global Wallet" auto-appears in the wallet list */}
-        <ConnectButton />
-      </RainbowKitProvider>
-    </WagmiProvider>
-  );
-}
-```
-
-**wagmi (standalone):**
-
-```tsx
-import "@story-protocol/global-wallet/story";
-import { useConnect } from "wagmi";
-
-function ConnectButton() {
-  const { connect, connectors } = useConnect();
-
-  return (
-    <div>
-      {connectors.map((connector) => (
-        <button key={connector.id} onClick={() => connect({ connector })}>
-          {connector.name}
-        </button>
-      ))}
-      {/* "Story Global Wallet" will appear in the connectors list */}
-    </div>
-  );
-}
-```
-
-**ConnectKit:**
-
-```tsx
-import "@story-protocol/global-wallet/story";
-import { ConnectKitProvider, ConnectKitButton } from "connectkit";
-
-function App() {
-  return (
-    <ConnectKitProvider>
-      <ConnectKitButton />
-    </ConnectKitProvider>
-  );
-}
-```
-
-**Dynamic:**
-
-If your app already uses the [Dynamic SDK](https://www.dynamic.xyz/), the Story Global Wallet will also appear in the Dynamic wallet list. Add the import to your existing Client Component providers:
-
-```tsx
-// components/Providers.tsx
-"use client";
-import "@story-protocol/global-wallet/story";
-
-import { DynamicContextProvider } from "@dynamic-labs/sdk-react-core";
-import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
-
-export function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <DynamicContextProvider
-      settings={{
-        environmentId: "YOUR_DYNAMIC_ENVIRONMENT_ID",
-        walletConnectors: [EthereumWalletConnectors],
-      }}
-    >
-      {children}
-    </DynamicContextProvider>
-  );
-}
-```
-
-> **Note:** If your Dynamic environment has ZeroDev (Account Abstraction) enabled, you also need to add `ZeroDevSmartWalletConnectors`:
->
-> ```bash
-> npm install @dynamic-labs/ethereum-aa
-> ```
->
-> ```tsx
-> import { ZeroDevSmartWalletConnectors } from "@dynamic-labs/ethereum-aa";
->
-> // Add to walletConnectors array:
-> walletConnectors: [EthereumWalletConnectors, ZeroDevSmartWalletConnectors],
-> ```
+The Story Global Wallet is auto-discovered via [EIP-6963](https://eips.ethereum.org/EIPS/eip-6963) — no extra configuration needed. It appears alongside MetaMask, Coinbase Wallet, and others in any compatible wallet selector (RainbowKit, ConnectKit, wagmi, Dynamic, etc.).
 
 ### 3. That's it
 
@@ -139,9 +36,19 @@ The user gets the same wallet address across every app that integrates this pack
 
 ## Gas Sponsorship with ZeroDev
 
-The Story Global Wallet uses [ZeroDev](https://zerodev.app/) for Account Abstraction, enabling gasless (sponsored) transactions. You can create a kernel client to sponsor gas for your users.
+The Story Global Wallet uses [ZeroDev](https://zerodev.app/) for Account Abstraction, enabling gasless (sponsored) transactions. The setup differs depending on whether your app uses RainbowKit/wagmi or the Dynamic SDK directly.
 
-### Creating a Kernel Client
+### RainbowKit / wagmi
+
+For apps using RainbowKit or wagmi (without Dynamic's SDK), use `createKernelClient` from the global wallet package to create a ZeroDev kernel client.
+
+#### Additional dependencies
+
+```bash
+npm install @zerodev/sdk @dynamic-labs/ethereum-aa
+```
+
+#### Creating a Kernel Client
 
 ```tsx
 import GlobalWallet from "@story-protocol/global-wallet";
@@ -153,186 +60,167 @@ const kernelClient = await createKernelClient({
   wallet: smartWallet,
   chainId: 1514, // Story Mainnet
   paymaster: "SPONSOR",
-  paymasterRpc: "https://rpc.zerodev.app/api/v2/paymaster/02d8a620-8842-475c-ab23-576a7dd1a5be",
+  paymasterRpc: "YOUR_ZERODEV_PAYMASTER_RPC",
 });
 ```
 
-### Sending Sponsored Transactions
+#### Sending Transactions & Resolving UserOp Hashes
 
-Once you have a kernel client, you can batch and send gasless user operations:
+Transactions are sent through wagmi's wallet client (which routes through the Global Wallet popup for signing). The kernel client is used **only** to resolve the UserOperation hash into a real transaction hash via `waitForUserOperationReceipt`:
 
 ```tsx
-import { encodeFunctionData } from "viem";
+import { useWalletClient } from "wagmi";
+import { Hash } from "viem";
 
-const { account } = kernelClient;
-
-const hash = await kernelClient.sendUserOperation({
-  account,
-  callData: await account.encodeCalls([
-    {
-      to: contractAddress,
-      value: BigInt(0),
-      data: encodeFunctionData({
-        abi: contractABI,
-        functionName: "mint",
-        args: [walletAddress],
-      }),
-    },
-  ]),
+// Send through wagmi (handles signing via the Global Wallet popup)
+const { data: walletClient } = useWalletClient();
+const hash = await walletClient.sendTransaction({
+  account: address,
+  to: "0x...",
+  value: BigInt(0),
+  data: "0x",
 });
+
+// Resolve the UserOp hash to a real transaction hash
+const receipt = await kernelClient.waitForUserOperationReceipt({
+  hash: hash as Hash,
+});
+console.log("Tx hash:", receipt.receipt.transactionHash);
 ```
 
-### Using with the Story SDK
+> **Important:** Do not use `kernelClient.sendUserOperation()` to send transactions — this will hang in the popup. Always send through wagmi's wallet client and use the kernel client only for receipt resolution.
 
-When using the Story Global Wallet with `@story-protocol/core-sdk`, ZeroDev returns **UserOperation hashes** instead of regular transaction hashes. The Story SDK needs a `txHashResolver` to convert these into real transaction hashes so it can track on-chain events.
+#### Using with the Story SDK
 
-Use `waitForUserOperationReceipt` on the kernel client to resolve UserOp hashes:
+When using `@story-protocol/core-sdk`, ZeroDev returns UserOperation hashes instead of regular transaction hashes. The Story SDK needs a `txHashResolver` to convert these so it can track on-chain events.
+
+Build a `txHashResolver` from the kernel client and pass it to `StoryClient.newClientUseWallet()`:
 
 ```tsx
-import {
-  StoryClient,
-  SupportedChainIds,
-} from "@story-protocol/core-sdk";
+import { StoryClient, SupportedChainIds } from "@story-protocol/core-sdk";
 import GlobalWallet from "@story-protocol/global-wallet";
 import { createKernelClient } from "@story-protocol/global-wallet/zerodev";
 import { Hash, http } from "viem";
 
-// 1. Create the kernel client from the Global Wallet
-const smartWallet = GlobalWallet.wallets[0];
-const kernelClient = await createKernelClient({
-  wallet: smartWallet,
+// Build txHashResolver from kernel client
+const kernelClientPromise = createKernelClient({
+  wallet: GlobalWallet.wallets[0],
   chainId: 1514,
   paymaster: "SPONSOR",
-  paymasterRpc: "https://rpc.zerodev.app/api/v2/paymaster/02d8a620-8842-475c-ab23-576a7dd1a5be",
+  paymasterRpc: "YOUR_ZERODEV_PAYMASTER_RPC",
 });
 
-// 2. Build a txHashResolver that converts UserOp hashes to tx hashes
 const txHashResolver = async (userOpHash: Hash): Promise<Hash> => {
+  const kernelClient = await kernelClientPromise;
   const receipt = await kernelClient.waitForUserOperationReceipt({
     hash: userOpHash,
   });
   return receipt.receipt.transactionHash;
 };
 
-// 3. Pass the resolver when creating the StoryClient
+// Pass the resolver when creating the StoryClient
 const storyClient = StoryClient.newClientUseWallet({
   transport: http(),
-  wallet: walletClient, // from wagmi useWalletClient() or similar
+  wallet: walletClient, // from wagmi useWalletClient()
   chainId: "1514" as SupportedChainIds,
   txHashResolver,
 });
+```
 
-// 4. Now SDK write operations work with sponsored transactions
-const response = await storyClient.license.mintLicenseTokens({
-  licenseTermsId: "1",
-  licensorIpId: "0x...",
-  receiver: "0x...",
-  amount: 1,
+### Dynamic SDK
+
+For apps using the [Dynamic SDK](https://www.dynamic.xyz/) directly, the ZeroDev kernel client is already available on Dynamic's wallet connector — you don't need to call `createKernelClient` from the global wallet package.
+
+#### Prerequisites
+
+1. Enable ZeroDev in your Dynamic dashboard with gas sponsorship configured for Story (chain 1514)
+2. Install the required packages:
+
+```bash
+npm install @dynamic-labs/ethereum-aa viem
+```
+
+3. Add `ZeroDevSmartWalletConnectors` to your Dynamic provider:
+
+```tsx
+import { DynamicContextProvider } from "@dynamic-labs/sdk-react-core";
+import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
+import { ZeroDevSmartWalletConnectors } from "@dynamic-labs/ethereum-aa";
+
+<DynamicContextProvider
+  settings={{
+    environmentId: "YOUR_DYNAMIC_ENVIRONMENT_ID",
+    walletConnectors: [EthereumWalletConnectors, ZeroDevSmartWalletConnectors],
+  }}
+>
+  {children}
+</DynamicContextProvider>
+```
+
+#### Sending Transactions
+
+With Dynamic, transactions are sent through the wallet client on the connector. Dynamic's ZeroDev integration handles gas sponsorship automatically:
+
+```tsx
+import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+
+const { primaryWallet } = useDynamicContext();
+
+// Get the viem wallet client from Dynamic's connector
+const walletClient = (primaryWallet.connector as any).getWalletClient();
+
+const hash = await walletClient.sendTransaction({
+  account: primaryWallet.address,
+  to: "0x...",
+  value: BigInt(0),
+  data: "0x",
 });
 ```
 
-#### React Example (wagmi)
+#### Using with the Story SDK
 
-Here's a full React provider pattern for integrating gas sponsorship with the Story SDK:
+With Dynamic, the ZeroDev kernel client is already available on the connector. Use `isZeroDevConnector` to detect AA wallets and build a `txHashResolver`:
 
 ```tsx
-"use client";
-
-import {
-  StoryClient,
-  SupportedChainIds,
-} from "@story-protocol/core-sdk";
-import GlobalWallet from "@story-protocol/global-wallet";
-import { createKernelClient } from "@story-protocol/global-wallet/zerodev";
-import {
-  createContext,
-  ReactNode,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { isZeroDevConnector } from "@dynamic-labs/ethereum-aa";
+import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { StoryClient, SupportedChainIds } from "@story-protocol/core-sdk";
 import { Hash, http } from "viem";
-import { useWalletClient } from "wagmi";
 
-interface StorySDKContextValue {
-  storyClient: StoryClient | null;
-  isLoading: boolean;
+const { primaryWallet } = useDynamicContext();
+
+// Build txHashResolver from the connector's built-in kernel client
+let txHashResolver: ((hash: Hash) => Promise<Hash>) | undefined;
+
+if (primaryWallet && isZeroDevConnector(primaryWallet.connector)) {
+  const connector = primaryWallet.connector as {
+    kernelClient?: {
+      waitForUserOperationReceipt: (args: {
+        hash: Hash;
+      }) => Promise<{ receipt: { transactionHash: Hash } }>;
+    };
+  };
+
+  txHashResolver = async (userOpHash: Hash): Promise<Hash> => {
+    if (!connector.kernelClient) {
+      throw new Error("ZeroDev kernel client not available");
+    }
+    const receipt = await connector.kernelClient.waitForUserOperationReceipt({
+      hash: userOpHash,
+    });
+    return receipt.receipt.transactionHash;
+  };
 }
 
-const StorySDKContext = createContext<StorySDKContextValue | null>(null);
+// Pass the resolver when creating the StoryClient
+const walletClient = (primaryWallet.connector as any).getWalletClient();
 
-export function useStorySDK() {
-  const context = useContext(StorySDKContext);
-  if (!context) {
-    throw new Error("useStorySDK must be used within a StorySdkProvider");
-  }
-  return context;
-}
-
-export function StorySdkProvider({ children }: { children: ReactNode }) {
-  const { data: walletClient } = useWalletClient();
-  const [storyClient, setStoryClient] = useState<StoryClient | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const txHashResolver = useMemo(() => {
-    const smartWallet = GlobalWallet.wallets?.[0];
-    if (!smartWallet) return undefined;
-
-    try {
-      const kernelClient = createKernelClient({
-        wallet: smartWallet,
-        chainId: 1514,
-        paymaster: "SPONSOR",
-        paymasterRpc: "https://rpc.zerodev.app/api/v2/paymaster/02d8a620-8842-475c-ab23-576a7dd1a5be",
-      });
-
-      return async (userOpHash: Hash): Promise<Hash> => {
-        const receipt = await (
-          await kernelClient
-        ).waitForUserOperationReceipt({
-          hash: userOpHash,
-        });
-        return receipt.receipt.transactionHash;
-      };
-    } catch (error) {
-      console.warn(
-        "[StorySdkProvider] Could not create kernel client:",
-        error,
-      );
-      return undefined;
-    }
-  }, [walletClient]);
-
-  useEffect(() => {
-    if (!walletClient) {
-      setStoryClient(null);
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const client = StoryClient.newClientUseWallet({
-        transport: http(),
-        wallet: walletClient,
-        chainId: `${walletClient.chain.id}` as SupportedChainIds,
-        txHashResolver,
-      });
-
-      setStoryClient(client);
-    } catch (error) {
-      console.error("[StorySdkProvider] Error creating StoryClient:", error);
-      setStoryClient(null);
-    }
-    setIsLoading(false);
-  }, [walletClient, txHashResolver]);
-
-  return (
-    <StorySDKContext.Provider value={{ storyClient, isLoading }}>
-      {children}
-    </StorySDKContext.Provider>
-  );
-}
+const storyClient = StoryClient.newClientUseWallet({
+  transport: http(),
+  wallet: walletClient,
+  chainId: "1514" as SupportedChainIds,
+  txHashResolver,
+});
 ```
 
 ## How It Works

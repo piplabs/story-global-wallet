@@ -6,6 +6,17 @@ import { DynamicContextProvider } from "@dynamic-labs/sdk-react-core";
 import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
 import { ZeroDevSmartWalletConnectors } from "@dynamic-labs/ethereum-aa";
 
+export const storyChain = {
+  chainId: 1514,
+  blockExplorerUrls: ["https://storyscan.io"],
+  iconUrls: ["https://app.dynamic.xyz/assets/networks/sepolia.svg"],
+  name: "story",
+  nativeCurrency: { name: "Story", symbol: "IP", decimals: 18 },
+  networkId: 1514,
+  rpcUrls: ["https://mainnet.storyrpc.io/"],
+  vanityName: "Story Mainnet",
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -25,20 +36,7 @@ export default function RootLayout({
               ZeroDevSmartWalletConnectors,
             ],
             overrides: {
-              evmNetworks: [
-                {
-                  chainId: 1514,
-                  blockExplorerUrls: ["https://storyscan.io"],
-                  iconUrls: [
-                    "https://app.dynamic.xyz/assets/networks/sepolia.svg",
-                  ],
-                  name: "story",
-                  nativeCurrency: { name: "Story", symbol: "IP", decimals: 18 },
-                  networkId: 1514,
-                  rpcUrls: ["https://mainnet.storyrpc.io/"],
-                  vanityName: "Story Mainnet",
-                },
-              ],
+              evmNetworks: [storyChain],
             },
           }}
         >
