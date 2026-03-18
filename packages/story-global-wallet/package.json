@@ -2,7 +2,7 @@
   "name": "@story-protocol/global-wallet",
   "author": "PIP Labs",
   "description": "Story Protocol Global Wallet - Cross-app embedded wallet for the IP ecosystem",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "type": "module",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
