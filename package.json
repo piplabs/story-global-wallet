@@ -12,6 +12,11 @@
   "author": "Story Protocol",
   "license": "MIT",
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ],
+    "overrides": {
+      "next": "15.0.8"
+    }
   }
 }
